@@ -645,9 +645,26 @@ function saveMeeting() {
   const date  = document.getElementById('meeting-date').value;
   if (!raw) { showToast('⚠️ Nothing to save!'); return; }
 
-  const meeting = { id: Date.now().toString(), title, date, rawText: raw, savedAt: new Date().toISOString() };
   const meetings = getStoredMeetings();
-  meetings.unshift(meeting);
+  
+  // Check if a meeting with same title already exists
+  const existingIdx = meetings.findIndex(m => m.title === title);
+  
+  let meeting;
+  if (existingIdx !== -1) {
+    // Update existing meeting
+    meetings[existingIdx].rawText = raw;
+    meetings[existingIdx].date = date;
+    meetings[existingIdx].savedAt = new Date().toISOString();
+    meeting = meetings[existingIdx];
+    showToast(`✅ Meeting updated: "${title}"`);
+  } else {
+    // Create new meeting
+    meeting = { id: Date.now().toString(), title, date, rawText: raw, savedAt: new Date().toISOString() };
+    meetings.unshift(meeting);
+    showToast('✅ Meeting saved!');
+  }
+  
   localStorage.setItem('bn_meetings', JSON.stringify(meetings));
   localStorage.removeItem('bn_draft');
 
@@ -655,9 +672,7 @@ function saveMeeting() {
   if (deferred && deferred.length > 0) {
     deferred.forEach(line => insertIntoFollowUp({ ...line, meetingId: meeting.id, meetingTitle: title, meetingDate: date }));
     window._pendingDeferred = null;
-    showToast(`✅ Saved! ${deferred.length} deferred line${deferred.length !== 1 ? 's' : ''} added to Follow-Up.`);
-  } else {
-    showToast('✅ Meeting saved!');
+    showToast(`✅ ${deferred.length} deferred line${deferred.length !== 1 ? 's' : ''} added to Follow-Up.`);
   }
 
   cancelFitForChat();
