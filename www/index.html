@@ -7,26 +7,29 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
   <!-- HEADER -->
   <header class="app-header">
     <div class="logo">
-      <span class="logo-icon">📋</span>
+      <span class="logo-icon"><i data-lucide="clipboard-list"></i></span>
       <span class="logo-text">Block<strong>Notes</strong></span>
     </div>
     <nav class="header-nav">
-      <button class="nav-btn active" id="btn-editor"  onclick="switchView('editor')">✏️ Live Editor</button>
-      <button class="nav-btn"        id="btn-archive" onclick="switchView('archive')">🗃️ Archive</button>
-      <button class="nav-btn"        id="btn-followup" onclick="switchView('followup')">
-        📣 Follow-Up <span id="followup-badge" class="followup-badge hidden">0</span>
+      <button class="nav-btn active" id="btn-editor"  onclick="switchView('editor')" title="Live Editor"><i data-lucide="pen-line"></i></button>
+      <button class="nav-btn"        id="btn-archive" onclick="switchView('archive')" title="Archive"><i data-lucide="archive"></i></button>
+      <button class="nav-btn"        id="btn-followup" onclick="switchView('followup')" title="Follow-Up">
+        <i data-lucide="megaphone"></i><span id="followup-badge" class="followup-badge hidden">0</span>
       </button>
     </nav>
     <div class="header-actions">
-      <button class="action-btn" onclick="saveMeeting()" title="Save Meeting">💾 Save</button>
-      <button class="action-btn danger" onclick="clearEditor()" title="Clear Editor">🗑️ Clear</button>
+      <button class="action-btn" onclick="saveMeeting()" title="Save Meeting"><i data-lucide="save"></i> Save</button>
+      <button class="action-btn danger" onclick="clearEditor()" title="Clear Editor"><i data-lucide="trash-2"></i> Clear</button>
+      <button class="nav-btn theme-toggle" id="btn-theme" onclick="toggleTheme()" title="Toggle Dark/Light Mode" style="padding: 8px 12px; margin-left: 8px;"><i data-lucide="moon"></i></button>
     </div>
   </header>
 
@@ -34,6 +37,7 @@
   <div class="meta-bar" id="meta-bar">
     <input type="text" id="meeting-title" class="meta-input" placeholder="Meeting Title (e.g. Block 4A General Assembly)" />
     <input type="date" id="meeting-date" class="meta-input" />
+    <button id="btn-layout-toggle" class="meta-btn" onclick="toggleLayout()" title="Toggle View Layout"><i data-lucide="layout"></i></button>
     <div class="tag-legend">
       <span class="tag-chip acad">#acad</span>
       <span class="tag-chip org">#org</span>
@@ -65,16 +69,16 @@
             <span class="fit-label">Fit for Chat:</span>
             <input type="number" id="char-budget" class="char-budget-input" value="500" min="100" max="2000" title="Character budget" />
             <span class="fit-label">chars</span>
-            <button class="fit-btn" id="fit-btn" onclick="runFitForChat()">⚡ Run</button>
-            <button class="info-btn" onclick="openScoringInfo()" title="Scoring reference">ℹ️</button>
-            <button class="fit-copy-btn hidden" id="fit-copy-btn" onclick="copyFitSelection()">📤 Copy Selected</button>
-            <button class="fit-cancel-btn hidden" id="fit-cancel-btn" onclick="cancelFitForChat()">✕</button>
+            <button class="fit-btn" id="fit-btn" onclick="runFitForChat()"><i data-lucide="zap"></i> Run</button>
+            <button class="info-btn" onclick="openScoringInfo()" title="Scoring reference"><i data-lucide="info"></i></button>
+            <button class="fit-copy-btn hidden" id="fit-copy-btn" onclick="copyFitSelection()"><i data-lucide="upload"></i> Copy Selected</button>
+            <button class="fit-cancel-btn hidden" id="fit-cancel-btn" onclick="cancelFitForChat()"><i data-lucide="x"></i></button>
           </div>
         </div>
       </div>
 
-      <!-- DIVIDER -->
-      <div class="divider"><div class="divider-arrow">▶</div></div>
+      <!-- DIVIDER (RESIZER) -->
+      <div class="divider" id="resizer"><div class="divider-arrow"><i data-lucide="grip-vertical"></i></div></div>
 
       <!-- RIGHT PANEL -->
       <div class="panel panel-right">
@@ -84,7 +88,7 @@
         </div>
         <div id="structured-output" class="structured-output">
           <div class="empty-state">
-            <div class="empty-icon">📝</div>
+            <div class="empty-icon"><i data-lucide="file-text"></i></div>
             <p>Start typing on the left to see your notes organize in real-time.</p>
           </div>
         </div>
@@ -111,12 +115,12 @@
   <main id="view-archive" class="view">
     <div class="archive-container">
       <div class="archive-header">
-        <h2 class="archive-title">📂 Meeting Archive</h2>
+        <h2 class="archive-title"><i data-lucide="folder-open"></i> Meeting Archive</h2>
         <div class="search-wrapper">
           <input type="text" id="search-input" class="search-input"
             placeholder="Search keyword (e.g. exam, deadline, party)..."
             oninput="searchArchive(this.value)" />
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><i data-lucide="search"></i></span>
         </div>
       </div>
       <div id="search-results" class="search-results hidden">
@@ -131,13 +135,13 @@
   <main id="view-followup" class="view">
     <div class="archive-container">
       <div class="archive-header">
-        <h2 class="archive-title">📣 Follow-Up Announcements</h2>
+        <h2 class="archive-title"><i data-lucide="megaphone"></i> Follow-Up Announcements</h2>
         <p class="followup-desc">Lines excluded by Fit for Chat, sorted by urgency. Select and post when ready.</p>
       </div>
       <!-- Bulk action toolbar — hidden until items are checked -->
       <div id="followup-toolbar" class="followup-toolbar hidden">
         <span class="followup-toolbar-count"><span id="followup-sel-count">0</span> selected</span>
-        <button class="fit-copy-btn" onclick="postSelectedFollowUp()">📤 Copy &amp; Post Selected</button>
+        <button class="fit-copy-btn" onclick="postSelectedFollowUp()"><i data-lucide="upload"></i> Copy &amp; Post Selected</button>
         <button class="fit-cancel-btn" onclick="clearFollowUpSelection()">Clear selection</button>
       </div>
       <div id="followup-list" class="archive-list"></div>
@@ -151,15 +155,34 @@
   <div id="roster-modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <h3>👥 Manage Block Roster</h3>
-        <button onclick="closeRoster()" class="modal-close">✕</button>
+        <h3><i data-lucide="users"></i> Manage Block Roster</h3>
+        <button onclick="closeRoster()" class="modal-close"><i data-lucide="x"></i></button>
       </div>
       <p class="modal-sub">One name per line. Used for @name autocomplete.</p>
       <textarea id="roster-textarea" class="roster-textarea"
         placeholder="Maria Santos&#10;Juan dela Cruz&#10;Ana Reyes&#10;Christopher Bautista&#10;Bernadette Lim"></textarea>
-      <div class="modal-actions">
-        <button class="action-btn" onclick="saveRoster()">💾 Save Roster</button>
+      <div class="modal-actions" style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;">
+        <input type="file" id="roster-file-input" accept=".xlsx, .xls, .csv, .txt" style="display: none;" onchange="handleRosterFile(event)" />
+        <button class="action-btn" style="background: var(--surface2); color: var(--text); margin-right: auto;" onclick="document.getElementById('roster-file-input').click()">
+          <i data-lucide="upload"></i> Import File
+        </button>
+        <button class="action-btn" onclick="saveRoster()"><i data-lucide="save"></i> Save Roster</button>
         <button class="action-btn danger" onclick="closeRoster()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UNSAVED ROSTER MODAL -->
+  <div id="roster-unsaved-modal" class="modal-overlay hidden" style="z-index: 1000;">
+    <div class="modal" style="max-width: 400px; text-align: center;">
+      <div class="modal-header" style="justify-content: center; border-bottom: none; position: relative;">
+        <h3><i data-lucide="alert-triangle" style="color: var(--danger);"></i> Unsaved Changes</h3>
+        <button onclick="cancelCloseRoster()" class="modal-close" style="position: absolute; right: 0; top: -4px;"><i data-lucide="x"></i></button>
+      </div>
+      <p class="modal-sub" style="margin-bottom: 24px;">You have unsaved changes in your roster. Do you want to save them before closing?</p>
+      <div class="modal-actions" style="justify-content: center; flex-wrap: wrap; gap: 8px;">
+        <button class="action-btn" onclick="saveRoster()"><i data-lucide="check"></i> Yes, Save</button>
+        <button class="action-btn danger" onclick="forceCloseRoster()"><i data-lucide="x"></i> No, Discard</button>
       </div>
     </div>
   </div>
@@ -168,8 +191,8 @@
   <div id="custom-modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <h3>✏️ Custom Urgency Words</h3>
-        <button onclick="closeCustomModal()" class="modal-close">✕</button>
+        <h3><i data-lucide="pen-line"></i> Custom Urgency Words</h3>
+        <button onclick="closeCustomModal()" class="modal-close"><i data-lucide="x"></i></button>
       </div>
       <p class="modal-sub">Words you add here raise a line's urgency score when matched. Max 5 pts per word.</p>
       <div id="custom-words-list" class="custom-words-list"></div>
@@ -189,8 +212,8 @@
   <div id="scoring-overlay" class="scoring-overlay hidden" onclick="closeScoringInfo()">
     <div class="scoring-window" onclick="event.stopPropagation()">
       <div class="scoring-header">
-        <span class="scoring-title">📊 Urgency Scoring Reference</span>
-        <button class="modal-close" onclick="closeScoringInfo()">✕</button>
+        <span class="scoring-title"><i data-lucide="bar-chart"></i> Urgency Scoring Reference</span>
+        <button class="modal-close" onclick="closeScoringInfo()"><i data-lucide="x"></i></button>
       </div>
       <!-- Page indicator -->
       <div class="scoring-pages">
@@ -204,8 +227,13 @@
   </div>
 
   <!-- FLOATING ROSTER BTN -->
-  <button class="fab" onclick="openRoster()" title="Manage Roster">👥</button>
+  <button class="fab" onclick="openRoster()" title="Manage Roster"><i data-lucide="users"></i></button>
 
-  <script src="script.js"></script>
+  <script src="js/algorithms.js"></script>
+  <script src="js/constants.js"></script>
+  <script src="js/script.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
 </body>
 </html>
