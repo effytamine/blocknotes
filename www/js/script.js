@@ -4,8 +4,8 @@
  * UI, state, event listeners, rendering, and all non-algorithm logic.
  * Depends on (loaded first via index.html):
  *   ../js/constants.js   — VALID_TAGS, TYPO_MAP, URGENCY_SIGNALS, TAG_BASE_POINTS
- *   ../js/algorithms.js  — parseLines, greedyHeuristic, resolveTag, buildHashIndex,
- *                          searchRoster, insertIntoFollowUp
+ *   ../js/algorithms.js  — parseLines, greedyHeuristic, resolveTag,
+ *                          searchRoster, insertIntoFollowUp(queue, item)
  */
 
 // ============================================================
@@ -31,6 +31,7 @@ let _knapCache = { fingerprint: null, budget: null, included: new Set(), exclude
 
 // ── Fit-for-Chat state ───────────────────────────────────────
 let _fitActive      = false;
+let _fitCopied      = false; // true once "Copy Selected" has been run for the current fit session
 let _checkedState   = new Map();
 let _allScoredLines = [];
 let _charBudget     = 500;
@@ -280,6 +281,7 @@ function runFitForChat() {
 
 function activateFitMode(included, scored) {
   _fitActive      = true;
+  _fitCopied      = false;
   _allScoredLines = scored;
   _checkedState   = new Map();
   for (let i = 0; i < scored.length; i++) _checkedState.set(i, included.has(i));
@@ -314,6 +316,7 @@ function renderFitLines() {
 
 function onFitCheck(idx, checked) {
   _checkedState.set(idx, checked);
+  _fitCopied = false; // selection changed — must re-copy before saving
   const label = document.querySelector(`.fit-line input[data-idx="${idx}"]`)?.closest('.fit-line');
   if (label) { label.classList.toggle('fit-checked', checked); label.classList.toggle('fit-unchecked', !checked); }
   updateFitBar();
@@ -370,12 +373,14 @@ function copyFitSelection() {
   window._pendingDeferred = uncheckedLines.map(l => ({
     rawLine: l.rawLine, displayText: l.displayText, tag: l.tag, value: l.value, assignee: l.assignee, task: l.task
   }));
+  _fitCopied = true;
 
   showToast(`📤 Copied ${checkedLines.length} lines. ${uncheckedLines.length} deferred — save to add to Follow-Up.`);
 }
 
 function cancelFitForChat() {
   _fitActive = false;
+  _fitCopied = false;
   _checkedState.clear();
   _allScoredLines        = [];
   window._pendingDeferred = null;
@@ -398,8 +403,27 @@ function getStoredMeetings() {
 }
 
 // ============================================================
-// FEATURE 4 — ARCHIVE SEARCH UI (calls buildHashIndex from algorithms.js)
+// FEATURE 4 — SEARCH BY KEYWORD UPON MEETINGS
+// Builds a word → meeting index, then matches the query as a
+// substring against indexed words. Lives here, not algorithms.js,
+// since it's a Map-backed lookup, not a from-scratch hash table —
+// no collision handling of our own to show off.
 // ============================================================
+
+function buildHashIndex(meetings) {
+  const index = new Map();
+
+  meetings.forEach(m => {
+    const words = (m.rawText + ' ' + m.title).toLowerCase().match(/\b\w{3,}\b/g) || [];
+
+    new Set(words).forEach(w => {
+      if (!index.has(w)) index.set(w, []);
+      index.get(w).push({ id: m.id, title: m.title, date: m.date });
+    });
+  });
+
+  return index;
+}
 
 function searchArchive(query) {
   const resultsEl = document.getElementById('search-results');
@@ -411,8 +435,16 @@ function searchArchive(query) {
   const index   = buildHashIndex(meetings);
   const keyword = query.toLowerCase().trim();
   const seenIds = new Set();
-  const hits    = (index[keyword] || []).filter(h => { if (seenIds.has(h.id)) return false; seenIds.add(h.id); return true; })
-                   .map(h => meetings.find(m => m.id === h.id)).filter(Boolean);
+  const hits    = [];
+  for (const [word, entries] of index) {
+    if (!word.includes(keyword)) continue;
+    for (const h of entries) {
+      if (seenIds.has(h.id)) continue;
+      seenIds.add(h.id);
+      const meeting = meetings.find(m => m.id === h.id);
+      if (meeting) hits.push(meeting);
+    }
+  }
 
   if (!hits.length) {
     hitsEl.innerHTML = `<p style="color:var(--text-muted);font-size:13px">No results for "<strong>${escapeHtml(query)}</strong>"</p>`;
@@ -578,6 +610,11 @@ function getCaretCoordinates(element, position) {
 // ============================================================
 
 function saveMeeting() {
+  if (_fitActive && !_fitCopied) {
+    showToast('⚠️ Copy your Fit for Chat selection before saving (or hit Cancel to exit).', 'alert-triangle');
+    return;
+  }
+
   const raw   = document.getElementById('raw-input').value.trim();
   const title = document.getElementById('meeting-title').value.trim() || 'Untitled Meeting';
   const date  = document.getElementById('meeting-date').value;
@@ -601,7 +638,9 @@ function saveMeeting() {
 
   const deferred = window._pendingDeferred;
   if (deferred && deferred.length > 0) {
-    deferred.forEach(line => insertIntoFollowUp({ ...line, meetingId, meetingTitle: title, meetingDate: date }));
+    const queue = getFollowUpQueue(); // single read
+    deferred.forEach(line => insertIntoFollowUp(queue, { ...line, meetingId, meetingTitle: title, meetingDate: date }));
+    saveFollowUpQueue(queue); // single write
     window._pendingDeferred = null;
     showToast(`Saved! ${deferred.length} deferred line${deferred.length !== 1 ? 's' : ''} added to Follow-Up.`, 'check-circle');
   } else {
@@ -1030,6 +1069,15 @@ function switchView(view) {
   if (metaBar) metaBar.style.display = (view === 'editor') ? '' : 'none';
   if (view === 'archive')  loadArchiveView();
   if (view === 'followup') renderFollowUp();
+}
+
+function newMeeting() {
+  if (!window._currentMeetingId) {
+    showToast('Already a new meeting — nothing loaded.', 'file-plus');
+    return;
+  }
+  window._currentMeetingId = null;
+  showToast('Started a new meeting — Save will create a new archive entry.', 'file-plus');
 }
 
 function clearEditor() {

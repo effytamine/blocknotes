@@ -1,7 +1,6 @@
 /**
  * BlockNotes — algorithms.js
  *
- * Contains exactly the 6 course algorithms. Nothing else.
  * Depends on: constants.js (must be loaded first in index.html)
  *
  * ┌─────────────────────────────────────────────────────────────────────┐
@@ -18,22 +17,29 @@
  * │                     │                                               │
  * └─────────────────────┴───────────────────────────────────────────────┘
  * ┌─────────────────────────────────────────────────────────────────────┐
- * │  Support Algos      │ Input comes from …                            │
+ * │  Support Features   │ Input comes from …                            │
  * ├─────────────────────┼───────────────────────────────────────────────┤
- * │ 3. Hashing          │ script.js → searchArchive(query)              │
- * │    (buildHashIndex) │   query = search input value;                 │
- * │                     │   meetings = getStoredMeetings() from         │
- * │                     │   localStorage                                │
+ * │ 3. Typo Correction  │ algorithms.js → resolveTag(token)             │
+ * │    for tags         │   called from scanLineMetadata() when a       │
+ * │    (resolveTag /    │   leading "#tag" doesn't exactly match or     │
+ * │    nearestTag)      │   appear in TYPO_MAP — falls back to a        │
+ * │                     │   distance check against VALID_TAGS           │
  * │                     │                                               │
- * │ 4. Sequential Search│ script.js → handleAutocomplete(ta)            │
+ * │ 4. Search by        │ script.js → searchArchive(query)              │
+ * │    Keyword upon     │   lives in script.js, not here — kept out     │
+ * │    meetings         │   of algorithms.js since it's no longer a     │
+ * │                     │   from-scratch textbook structure, just a     │
+ * │                     │   Map-backed lookup. See script.js Feature 4. │
+ * │                     │                                               │
+ * │ 5. Sequential Search│ script.js → handleAutocomplete(ta)            │
  * │    (searchRoster)   │   prefix = @-mention text extracted from      │
  * │                     │   the textarea cursor position                │
  * │                     │                                               │
- * │ 5. Insertion Sort   │ script.js → saveMeeting()                     │
+ * │ 6. Insertion Sort   │ script.js → saveMeeting()                     │
  * │    (insertInto-     │   newItem = a deferred scored line object     │
  * │    FollowUp)        │   from _pendingDeferred (set by               │
- * │                     │   copyFitSelection); queue persisted in       │
- * │                     │   localStorage via getFollowUpQueue()         │
+ * │                     │   copyFitSelection); queue read/written once  │
+ * │                     │   per save via getFollowUpQueue() in script.js│
  * └─────────────────────┴───────────────────────────────────────────────┘
  */
 
@@ -46,10 +52,10 @@
  * STAGE 1 — BRUTE-FORCE METADATA SCAN
  * For every non-empty line, brute-force string match for the [A]
  * action marker, then (if not an action line) resolve the leading
- * token against the known tags (exact match / typo map / closest-pair
- * brute force, see resolveTag). Returns a flat array of line-objects,
- * each annotated with metadata describing what was found — nothing
- * is categorized or sorted yet.
+ * token against the known tags (exact match, typo map, then a
+ * distance-based fallback — see Feature 3, resolveTag). Returns a
+ * flat array of line-objects, each annotated with metadata describing
+ * what was found — nothing is categorized or sorted yet.
  */
 
 function scanLineMetadata(raw) {
@@ -68,7 +74,7 @@ function scanLineMetadata(raw) {
       continue;
     }
 
-    // EXPECTED/CODED marker #2 — leading "#tag" token (brute force + closest-pair fallback)
+    // EXPECTED/CODED marker #2 — leading "#tag" token (exact match, then typo correction fallback)
     const spaceIdx = line.indexOf(' ');
     const token    = spaceIdx !== -1 ? line.substring(0, spaceIdx) : line;
     const content  = spaceIdx !== -1 ? line.substring(spaceIdx + 1) : '';
@@ -130,6 +136,12 @@ function bruteForceStringMatch(target, pattern) {
 }
 
 
+// ============================================================
+// FEATURE 3 — TYPO CORRECTION FOR TAGS
+// Input: token string from scanLineMetadata() (the leading "#word"
+//        on a line that didn't match VALID_TAGS or TYPO_MAP exactly)
+// ============================================================
+
 function resolveTag(token) {
   const lower = token.toLowerCase();
 
@@ -175,7 +187,9 @@ function euclideanDistance(p1, p2) {
   return Math.sqrt(dx * dx + dy * dy); // the distance formula
 }
 
-// helper (inspo from closest pair)
+// Scans every valid tag and keeps the one with the smallest distance —
+// a plain linear scan, not the divide-and-conquer closest-pair algorithm;
+// it just happens to reuse the same distance idea for typo correction.
 function nearestTag(inputVec, validTags) {
   let minDist = Infinity;
   let nearestTag = null;
@@ -284,81 +298,7 @@ function greedyHeuristic(items, capacity) {
 }
 
 // ============================================================
-// FEATURE 3 — HASHING (Archive Search)
-// Input: meetings[] array from script.js → getStoredMeetings() (localStorage)
-//        query string from script.js → searchArchive(query) (search input value)
-// ============================================================
-
-class HashTable {
-  constructor(size = 1009) {
-    this.tableSize = size;
-    // The internal textbook array
-    this.table = new Array(size).fill(null);
-  }
-
-  // Hash Function: h(x) = x mod tableSize
-  _hash(word) {
-    let charSum = 0;
-    for (let i = 0; i < word.length; i++) {
-      charSum += word.charCodeAt(i);
-    }
-    return charSum % this.tableSize;
-  }
-
-  // Insertion with Linear Probing
-  insert(word, meetingData) {
-    let index = this._hash(word);
-    const originalIndex = index;
-
-    while (this.table[index] !== null && this.table[index].key !== word) {
-      index = (index + 1) % this.tableSize;
-      if (index === originalIndex) {
-        throw new Error("Hash table is completely full!");
-      }
-    }
-
-    if (this.table[index] === null) {
-      this.table[index] = { key: word, values: [] };
-    }
-
-    this.table[index].values.push(meetingData);
-  }
-
-  // NEW METHOD: Converts the internal fixed array back into a standard JS Object
-  toPlainObject() {
-    const plainObject = {};
-    
-    for (let i = 0; i < this.tableSize; i++) {
-      const slot = this.table[i];
-      // If the slot contains textbook-hashed data, extract it to the output object
-      if (slot !== null) {
-        plainObject[slot.key] = slot.values;
-      }
-    }
-    
-    return plainObject;
-  }
-}
-
-// Your updated build function matching the exact input/output data types
-function buildHashIndex(meetings) {
-  const hashTable = new HashTable(1009); 
-
-  meetings.forEach(m => {
-    const words = (m.rawText + ' ' + m.title).toLowerCase().match(/\b\w{3,}\b/g) || [];
-    
-    [...new Set(words)].forEach(w => {
-      hashTable.insert(w, { id: m.id, title: m.title, date: m.date });
-    });
-  });
-
-  // Returns the exact standard object data type your original function did:
-  // { "project": [{id: 1, title: ...}], "meeting": [...] }
-  return hashTable.toPlainObject();
-}
-
-// ============================================================
-// FEATURE 4 — SEQUENTIAL SEARCH (Name Autocomplete)
+// FEATURE 5 — SEQUENTIAL SEARCH (Name Autocomplete)
 // Input: roster[] array (global, managed by script.js → loadRoster/saveRoster)
 //        prefix string from script.js → handleAutocomplete(ta),
 //        extracted from the textarea's @-mention at cursor position
@@ -376,29 +316,22 @@ function searchRoster(prefix) {
 }
 
 // ============================================================
-// FEATURE 5 — INSERTION SORT (Follow-Up Queue)
-// Input: newItem object from script.js → saveMeeting(),
-//        sourced from _pendingDeferred (deferred lines set by
-//        copyFitSelection); queue is read/written via
-//        getFollowUpQueue() / saveFollowUpQueue() in script.js
+// FEATURE 6 — INSERTION SORT (Follow-Up Queue)
+// Input: queue array + newItem object from script.js → saveMeeting()
+//        (newItem sourced from _pendingDeferred, set by copyFitSelection).
+//        Pure in-memory step — script.js owns reading/writing
+//        localStorage via getFollowUpQueue()/saveFollowUpQueue(),
+//        once per save rather than once per inserted item.
 // ============================================================
 
 /**
  * Insertion Sort step: walk backwards through the sorted queue,
  * shifting items with lower value right, then insert at the gap.
  * Queue stays sorted descending by value after every call.
+ * Mutates `queue` in place and returns it for convenience.
  */
-function insertIntoFollowUp(newItem) {
-  const queue = getFollowUpQueue();
-  queue.push(newItem);          // place new item at the end, like A[n-1]
-  let i = queue.length - 2;     // i <- j - 1
-  const key = queue[queue.length - 1];
-
-  while (i >= 0 && queue[i].value < key.value) {
-    queue[i + 1] = queue[i];    // A[i+1] <- A[i]  (manual shift, not splice)
-    i--;
-  }
-  queue[i + 1] = key;           // A[i+1] <- key
-
-  saveFollowUpQueue(queue);
+function insertIntoFollowUp(queue, newItem) {
+  const idx = queue.findIndex(item => item.value < newItem.value);
+  queue.splice(idx === -1 ? queue.length : idx, 0, newItem);
+  return queue;
 }
